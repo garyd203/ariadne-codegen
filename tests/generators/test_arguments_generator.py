@@ -82,8 +82,8 @@ def test_generate_saves_used_non_scalar_types():
 
     generator.generate(variable_definitions)
 
-    assert len(generator.used_types) == 2
-    assert generator.used_types == ["Type1", "Type2"]
+    assert len(generator.get_used_types()) == 2
+    assert generator._used_types == ["Type1", "Type2"]
 
 
 def test_generate_returns_arguments_and_dictionary_with_snake_case_names():

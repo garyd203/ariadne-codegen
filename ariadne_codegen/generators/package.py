@@ -29,6 +29,7 @@ from .init_file import InitFileGenerator
 from .input_types import InputTypesGenerator
 from .result_types import ResultTypesGenerator
 from .utils import ast_to_str, str_to_pascal_case, str_to_snake_case
+from .scalars import ScalarData
 
 
 class PackageGenerator:
@@ -55,6 +56,7 @@ class PackageGenerator:
         enums_generator: Optional[EnumsGenerator] = None,
         input_types_generator: Optional[InputTypesGenerator] = None,
         files_to_include: Optional[List[str]] = None,
+        custom_scalars: Optional[Dict[str, ScalarData]] = None,
     ) -> None:
         self.package_name = package_name
         self.target_path = target_path
@@ -62,6 +64,7 @@ class PackageGenerator:
         self.package_path = Path(target_path) / package_name
         self.client_name = client_name
         self.base_client_name = base_client_name
+        self.custom_scalars = custom_scalars if custom_scalars else {}
 
         self.base_model_file_path = (
             Path(__file__).parent / "dependencies" / "base_model.py"
@@ -98,7 +101,10 @@ class PackageGenerator:
         self.arguments_generator = (
             arguments_generator
             if arguments_generator
-            else ArgumentsGenerator(convert_to_snake_case=self.convert_to_snake_case)
+            else ArgumentsGenerator(
+                convert_to_snake_case=self.convert_to_snake_case,
+                custom_scalars=self.custom_scalars,
+            )
         )
         self.input_types_generator = (
             input_types_generator
@@ -108,6 +114,7 @@ class PackageGenerator:
                 enums_module=self.enums_module_name,
                 convert_to_snake_case=self.convert_to_snake_case,
                 base_model_import=self.base_model_import,
+                custom_scalars=self.custom_scalars,
             )
         )
         self.enums_generator = (
@@ -159,6 +166,7 @@ class PackageGenerator:
             fragments_definitions=self.fragments_definitions,
             base_model_import=self.base_model_import,
             convert_to_snake_case=self.convert_to_snake_case,
+            custom_scalars=self.custom_scalars,
         )
         self.result_types_files[file_name] = query_types_generator.generate()
         operation_str = query_types_generator.get_operation_as_str()
@@ -210,7 +218,7 @@ class PackageGenerator:
 
         input_types = []
         enums = []
-        for type_ in self.arguments_generator.used_types:
+        for type_ in self.arguments_generator.get_used_types():
             if isinstance(self.schema.type_map[type_], GraphQLInputObjectType):
                 input_types.append(type_)
             elif isinstance(self.schema.type_map[type_], GraphQLEnumType):
@@ -224,6 +232,12 @@ class PackageGenerator:
         self.client_generator.add_import(
             names=enums, from_=self.enums_module_name, level=1
         )
+
+        for custom_scalar_name in self.arguments_generator.get_used_custom_scalars():
+            for extra_import in self.custom_scalars[custom_scalar_name].extra_imports:
+                self.client_generator.add_import(
+                    names=[extra_import.import_], from_=extra_import.from_
+                )
 
         self.client_generator.add_import(
             names=[self.base_client_name],
